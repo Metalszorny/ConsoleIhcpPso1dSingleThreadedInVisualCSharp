@@ -3,7 +3,7 @@
 
 About:
 ------
-A console application to examine the heat transfer on the surface and in the inside of a solid metal cylindrical body. It uses a 2 dimensional inverse thermal model and for optaining an optimal solution; partical swarm optimization and running the application on the main thread.
+A console application to examine the heat transfer on the surface and in the inside of a solid metal cylindrical body. It uses a 1 dimensional inverse thermal model and for optaining an optimal solution; partical swarm optimization and running the application on the main thread.
 
 
 Used languages:

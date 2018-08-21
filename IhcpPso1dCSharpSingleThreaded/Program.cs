@@ -5,7 +5,7 @@ using System.IO;
 namespace IhcpPso1dCSharpSingleThreaded
 {
     /// <summary>
-    /// 
+    /// Calculates the reference cool-down curve from the hypothetical input data and searches for a similar cool-down curve within the given error value using a one dimensional cool-down model.
     /// </summary>
     class Program
     {
@@ -16,11 +16,14 @@ namespace IhcpPso1dCSharpSingleThreaded
         // The initial temperature of the object that's cooling down.
         private static double _initialTemperature;
 
-        // 
+        // The number of how many parts the body is split horizontally.
         private static int _horizontalSplitting;
 
-        // 
+        // The number of how many parts the body is split vertically.
         private static int _verticalSplitting;
+
+        // The tK value of the cool-down model.
+        private static double _tK;
 
         // The index of the horizontal part that is monitored.
         private static int _monitoredIndex;
@@ -49,35 +52,38 @@ namespace IhcpPso1dCSharpSingleThreaded
         // The limit value of time needed for the simulation of the object cooldown.
         private static double _simulationTime;
 
-        // 
+        // The height of the solid metal cylindrical body.
         private static double _height;
 
-        // 
+        // The radius of the solid metal cylindrical body.
         private static double _radius;
 
-        // 
+        // The density of the solid metal cylindrical body.
         private static double _density;
 
-        // 
+        // The identical distance the radius is split by the horizontal splitting number.
         private static double _dX;
 
-        // 
+        // The identical distance the height is split by the vertical splitting number.
         private static double _dY;
 
-        // 
-        private static double[] _referenceCooldownCurve;
-
-        // 
-        private static double _tK;
-
-        // 
+        // The row count of the heat conductivity and temperature values for the cooldown curves.
         private static int _heatConductivitiesSizeRows;
 
-        // 
+        // The row count of the specific heat and temperature values for the cooldown curves.
         private static int _specificHeatsSizeRows;
 
-        // 
+        // The reference cool-down curve.
+        private static double[] _referenceCooldownCurve;
+
+        // The row count of the reference cool-down curve.
         private static int _referenceCooldownCurveSizeRows;
+
+        // The calculated cool-down curve.
+        private static double[] _calculatedCooldownCurve;
+
+        // The row count of the calculated cool-down curve.
+        private static int _calculatedCooldownCurveSizeRows;
 
         #endregion HTC
 
@@ -89,74 +95,77 @@ namespace IhcpPso1dCSharpSingleThreaded
         // The initial position values for the particals, these were read for the file.
         private static double[] _particleInitialPosition;
 
-        // 
+        // The number of informers (or neighbors) a particle have.
         private static int _particleInformerNumber;
 
-        // 
+        // The constant1 number of the Clerk optimization.
         private static double _particleConstant1;
 
-        // 
+        // The constant2 number of the Clerk optimization.
         private static double _particleConstant2;
 
-        // 
+        // The fitness limit that the optimization aims to reach.
         private static double _particleEpsilon;
 
-        // 
+        // The positions of the particles.
         private static double[] _particlePosition;
 
-        // 
+        // The velocity of the particles.
         private static double[] _particleVelocity;
 
-        // 
+        // The best positions of the particles.
         private static double[] _particleBestPosition;
 
-        // 
+        // The fitness values of the particles.
         private static double[] _particleFitness;
 
-        // 
+        // The best fitness values of the particles.
         private static double[] _particleBestFitness;
 
-        // 
+        // The size of the global best values.
         private static int _globalBestSize;
 
-        // 
+        // The global best fitness value of the optimazition.
         private static double[] _globalBestFitness;
 
-        // 
+        // The global best positions of the optimazition.
         private static double[] _globalBestPosition;
 
-        // 
+        // The type of the optimization.
         private static int _particleOptimalisationType;
 
-        // 
+        // The size of the particle swarm.
         private static int _particleSwarmSize;
 
-        // 
+        // The maximum number of the optimization iterations.
         private static int _maxEpochs;
 
-        // 
+        // The maximum number of the optimization static iterations.
         private static int _maxStaticEpochs;
 
-        // 
+        // The weight of the particle.
         private static double _weight;
 
-        // 
+        // The informers (or neighbors) of the particles.
         private static int[] _particleInformers;
 
-        // 
+        // The size of the particle's position.
         private static int _particleInitialPositionSize;
 
-        // 
+        // The size of the particle's velocity.
         private static int _particleInitialVelocitySize;
 
-        // 
+        // The interation counter of the optimazion.
         private static int _epoch;
 
-        // 
+        // The stopwatch to mesure the elapsed time during the optimization.
         private static Stopwatch _stopwatch;
 
-        // 
+        // The termination reason.
         private static string _exitReason;
+
+        // The power exponent for the difference equation.
+        private static int _powerExponent;
 
         #endregion PSO
 
@@ -168,9 +177,9 @@ namespace IhcpPso1dCSharpSingleThreaded
         #region Methods
 
         /// <summary>
-        /// 
+        /// The main entry point of the application. This method controls the process of the application flow.
         /// </summary>
-        /// <param name="args"></param>
+        /// <param name="args">The console line input arguments.</param>
         static void Main(string[] args)
         {
             ReadDataFromFile("Resources\\ConfigurationIn.txt");
@@ -205,12 +214,14 @@ namespace IhcpPso1dCSharpSingleThreaded
             _stopwatch.Stop();
             WritePsoGlobalBestLogToFile();
             WriteExitResultAndTimeLogToFile(_stopwatch.ElapsedMilliseconds);
+            CalculateCalculatedCooldownCurve();
+            WriteCalculatedCooldownLogToFile();
         }
 
         /// <summary>
-        /// 
+        /// Reads the input values from the given file and initializes the fields used for the calculations.
         /// </summary>
-        /// <param name="dataFilePath"></param>
+        /// <param name="dataFilePath">The path and name to the input data file.</param>
         private static void ReadDataFromFile(string dataFilePath)
         {
             using (Stream stream = File.Open(dataFilePath, FileMode.Open, FileAccess.Read))
@@ -239,6 +250,10 @@ namespace IhcpPso1dCSharpSingleThreaded
                             else if (currentLine.ToLower().Contains("monitored index"))
                             {
                                 _monitoredIndex = Convert.ToInt32(streamReader.ReadLine().Trim().Replace(".", ","));
+                            }
+                            else if (currentLine.ToLower().Contains("power exponent"))
+                            {
+                                _powerExponent = Convert.ToInt32(streamReader.ReadLine().Trim().Replace(".", ","));
                             }
                             else if (currentLine.ToLower().Contains("range min"))
                             {
@@ -355,7 +370,7 @@ namespace IhcpPso1dCSharpSingleThreaded
 
                                 if (_heatConductivitiesSizeRows > 0)
                                 {
-                                    _heatConductivities = new double[_heatConductivitiesSizeRows * 2];
+                                    _heatConductivities = new double[(_heatConductivitiesSizeRows * 2)];
 
                                     for (int i = 0; i < (_heatConductivitiesSizeRows * 2); i += 2)
                                     {
@@ -372,7 +387,7 @@ namespace IhcpPso1dCSharpSingleThreaded
 
                                 if (_specificHeatsSizeRows > 0)
                                 {
-                                    _specificHeats = new double[_specificHeatsSizeRows * 2];
+                                    _specificHeats = new double[(_specificHeatsSizeRows * 2)];
 
                                     for (int i = 0; i < (_specificHeatsSizeRows * 2); i += 2)
                                     {
@@ -407,7 +422,7 @@ namespace IhcpPso1dCSharpSingleThreaded
 
                                 if (_dimensionNumber > 0)
                                 {
-                                    _htcValues = new double[_dimensionNumber * 2];
+                                    _htcValues = new double[(_dimensionNumber * 2)];
 
                                     for (int i = 0; i < (_dimensionNumber * 2); i += 2)
                                     {
@@ -425,28 +440,28 @@ namespace IhcpPso1dCSharpSingleThreaded
                 }
             }
 
-            _dX = (_radius / 1000) / _horizontalSplitting;
-            _dY = (_height / 1000) / _verticalSplitting;
+            _dX = ((_radius / 1000) / _horizontalSplitting);
+            _dY = ((_height / 1000) / _verticalSplitting);
             _tK = 0;
             _stopwatch = new Stopwatch();
             _random = new Random();
             _exitReason = "";
             // Get particle swarm initial values.
-            _particlePosition = new double[_particleSwarmSize * _dimensionNumber];
-            _particleVelocity = new double[_particleSwarmSize * _dimensionNumber];
-            _particleBestPosition = new double[_particleSwarmSize * _dimensionNumber];
+            _particlePosition = new double[(_particleSwarmSize * _dimensionNumber)];
+            _particleVelocity = new double[(_particleSwarmSize * _dimensionNumber)];
+            _particleBestPosition = new double[(_particleSwarmSize * _dimensionNumber)];
             _particleFitness = new double[_particleSwarmSize];
             _particleBestFitness = new double[_particleSwarmSize];
             _globalBestSize = 1;
             _globalBestFitness = new double[_globalBestSize];
-            _globalBestFitness[_globalBestSize - 1] = double.MaxValue;
-            _globalBestPosition = new double[_globalBestSize * _dimensionNumber];
+            _globalBestFitness[(_globalBestSize - 1)] = double.MaxValue;
+            _globalBestPosition = new double[(_globalBestSize * _dimensionNumber)];
         }
 
         /// <summary>
-        /// 
+        /// Sets the default values for the current temperature field.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The current temperature field filled with the default values.</returns>
         private static double[] SetInitialCurrentTemperature()
         {
             double[] returnValue = new double[_horizontalSplitting];
@@ -460,9 +475,9 @@ namespace IhcpPso1dCSharpSingleThreaded
         }
 
         /// <summary>
-        /// 
+        /// Sets the default values for the previous temperature field.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The previous temperature field filled with the default values.</returns>
         private static double[] SetInitialPreviousTemperature()
         {
             double[] returnValue = new double[_horizontalSplitting];
@@ -476,9 +491,9 @@ namespace IhcpPso1dCSharpSingleThreaded
         }
 
         /// <summary>
-        /// 
+        /// Sets the default values for the g field.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The g field filled with the default values.</returns>
         private static double[] SetInitialG()
         {
             double[] returnValue = new double[_horizontalSplitting];
@@ -492,19 +507,19 @@ namespace IhcpPso1dCSharpSingleThreaded
         }
 
         /// <summary>
-        /// 
+        /// Calculates the reference (or master) cool-down curve.
         /// </summary>
         private static void CalculateReferenceCooldownCurve()
         {
-            _referenceCooldownCurveSizeRows = (int)(_simulationTime / _timeDifference) + 1;
-            _referenceCooldownCurve = new double[_referenceCooldownCurveSizeRows * 2];
+            _referenceCooldownCurveSizeRows = ((int)(_simulationTime / _timeDifference) + 1);
+            _referenceCooldownCurve = new double[(_referenceCooldownCurveSizeRows * 2)];
             double[] currentTemperature = SetInitialCurrentTemperature();
             double[] previousTemperature = SetInitialPreviousTemperature();
             double[] g = SetInitialG();
 
             for (int i = 0; i < (_referenceCooldownCurveSizeRows * 2); i += 2)
             {
-                currentTemperature = CalculateCooldownCurve1D(false, -1, currentTemperature, previousTemperature, g);
+                currentTemperature = CalculateCooldownCurve1D(false, -1, false, currentTemperature, previousTemperature, g);
                 _referenceCooldownCurve[i + 0] = ((i / 2) * _timeDifference);
                 _referenceCooldownCurve[i + 1] = currentTemperature[_monitoredIndex];
 
@@ -520,22 +535,22 @@ namespace IhcpPso1dCSharpSingleThreaded
         }
 
         /// <summary>
-        /// 
+        /// Calculates the new values of the cool-down's next iteration using the one dimension cool-down model.
         /// </summary>
-        /// <param name="isParticle"></param>
-        /// <param name="particleIndex"></param>
-        /// <param name="currentTemperature"></param>
-        /// <param name="previousTemperature"></param>
-        /// <param name="g"></param>
-        /// <returns></returns>
-        private static double[] CalculateCooldownCurve1D(bool isParticle, int particleIndex, double[] currentTemperature, double[] previousTemperature, double[] g)
+        /// <param name="isParticle">Indicates if the calculation is on a particle.</param>
+        /// <param name="particleIndex">The particle's index in the swarm.</param>
+        /// <param name="currentTemperature">The current temperature values of the calculation.</param>
+        /// <param name="previousTemperature">The previous temperature values of the calculation.</param>
+        /// <param name="g">The g values of the calculation.</param>
+        /// <returns>The next iteration's cool-down values.</returns>
+        private static double[] CalculateCooldownCurve1D(bool isParticle, int particleIndex, bool useGlobal, double[] currentTemperature, double[] previousTemperature, double[] g)
         {
             double heatConductivity = GetHeatConductivity(currentTemperature[_horizontalSplitting - 1]);
             double alpha = GetAlpha(heatConductivity, GetSpecificHeat(currentTemperature[_horizontalSplitting - 1]));
             // tempTi[0] = tempTi-1[0] + dt * aplha * (1 / (dX * dX) * 2 * (tempTi-1[1] - tempTi-1[0]) + g[0] / HC)
             currentTemperature[0] = previousTemperature[0] + _timeDifference * alpha * (1 / (_dX * _dX) * 2 *
                 (previousTemperature[1] - previousTemperature[0]) + g[0] / heatConductivity);
-            double heatTransferCoefficient = GetHeatTransferCoefficient(currentTemperature[_horizontalSplitting - 1], isParticle, particleIndex);
+            double heatTransferCoefficient = GetHeatTransferCoefficient(currentTemperature[_horizontalSplitting - 1], isParticle, particleIndex, useGlobal);
             // tempTi[n] = tempTi-1[n] + dt * alpha * (1 / (dX * dX) * 2 * (tempTi-1[n - 1] - tempTi-1[n] - dX / HC * (HTC * (tempTi-1[n] - tK))) + 1 / (horizontalSplitting * dX) * (-1 / HC) * (HTC * (tempTi-1[n] - tK)) + g[n] / HC)
             currentTemperature[_horizontalSplitting - 1] = previousTemperature[_horizontalSplitting - 1] +
                 _timeDifference * alpha * (1 / (_dX * _dX) * 2 * (previousTemperature[_horizontalSplitting - 2] -
@@ -557,10 +572,10 @@ namespace IhcpPso1dCSharpSingleThreaded
         }
 
         /// <summary>
-        /// 
+        /// Gets the heat conductivity value for the given temperature.
         /// </summary>
-        /// <param name="temperature"></param>
-        /// <returns></returns>
+        /// <param name="temperature">The temperature to match the heat conductivity to.</param>
+        /// <returns>The heat conductivity value for the given temperature.</returns>
         private static double GetHeatConductivity(double temperature)
         {
             if (_heatConductivitiesSizeRows > 0)
@@ -590,6 +605,7 @@ namespace IhcpPso1dCSharpSingleThreaded
                         heatConductivity0 = 0;
                     }
 
+                    // Linear-interpolate the return value.
                     return ((heatConductivity1 - heatConductivity0) / (temperature1 - temperature0) * temperature -
                         ((heatConductivity1 - heatConductivity0) / (temperature1 - temperature0) * temperature0 - heatConductivity0));
                 }
@@ -603,10 +619,10 @@ namespace IhcpPso1dCSharpSingleThreaded
         }
 
         /// <summary>
-        /// 
+        /// Gets the specific heat value for the given temperature.
         /// </summary>
-        /// <param name="temperature"></param>
-        /// <returns></returns>
+        /// <param name="temperature">The temperature to match the specific heat to.</param>
+        /// <returns>The specific heat value for the given temperature.</returns>
         private static double GetSpecificHeat(double temperature)
         {
             if (_specificHeatsSizeRows > 0)
@@ -636,6 +652,7 @@ namespace IhcpPso1dCSharpSingleThreaded
                         specificHeat0 = 0;
                     }
 
+                    // Linear-interpolate the return value.
                     return ((specificHeat1 - specificHeat0) / (temperature1 - temperature0) * temperature -
                         ((specificHeat1 - specificHeat0) / (temperature1 - temperature0) * temperature0 - specificHeat0));
                 }
@@ -649,65 +666,113 @@ namespace IhcpPso1dCSharpSingleThreaded
         }
 
         /// <summary>
-        /// 
+        /// Gets the alpha value for the given heat conductivity and specific heat.
         /// </summary>
-        /// <param name="heatConductivity"></param>
-        /// <param name="specificHeat"></param>
-        /// <returns></returns>
+        /// <param name="heatConductivity">The heat conductivity to match the alpha to.</param>
+        /// <param name="specificHeat">The specific heat to match the alpha to.</param>
+        /// <returns>The alpha value for the given heat conductivity and specific heat.</returns>
         private static double GetAlpha(double heatConductivity, double specificHeat)
         {
             return (heatConductivity / (specificHeat * _density));
         }
 
         /// <summary>
-        /// 
+        /// Gets the heat transfer coefficient value for the given temperature.
         /// </summary>
-        /// <param name="temperature"></param>
-        /// <param name="isParticle"></param>
-        /// <param name="particleIndex"></param>
+        /// <param name="temperature">The temperature to match the heat transfer coefficient to.</param>
+        /// <param name="isParticle">Indicates if the calculation is on a particle.</param>
+        /// <param name="particleIndex">The particle's index in the swarm.</param>
         /// <returns></returns>
-        private static double GetHeatTransferCoefficient(double temperature, bool isParticle, int particleIndex)
+        private static double GetHeatTransferCoefficient(double temperature, bool isParticle, int particleIndex, bool useGlobal)
         {
-            if (!isParticle)
+            if (!useGlobal)
             {
-                if (_dimensionNumber > 0)
+                // The calculation is based on the temperature parameter.
+                if (!isParticle)
                 {
-                    double heatTransferCoefficient0 = 0;
-                    double heatTransferCoefficient1 = 0;
-                    double temperature0 = 0;
-                    double temperature1 = 0;
-                    int i = 0;
-
-                    while ((i < (_dimensionNumber * 2)) &&
-                        (_htcValues[i + 0] <= temperature))
+                    if (_dimensionNumber > 0)
                     {
-                        heatTransferCoefficient0 = _htcValues[i + 1];
-                        temperature0 = _htcValues[i + 0];
-                        i += 2;
-                    }
+                        double heatTransferCoefficient0 = 0;
+                        double heatTransferCoefficient1 = 0;
+                        double temperature0 = 0;
+                        double temperature1 = 0;
+                        int i = 0;
 
-                    if (i < (_dimensionNumber * 2))
-                    {
-                        heatTransferCoefficient1 = _htcValues[i + 1];
-                        temperature1 = _htcValues[i + 0];
-
-                        if (i == 0)
+                        while ((i < (_dimensionNumber * 2)) &&
+                            (_htcValues[i + 0] <= temperature))
                         {
-                            temperature0 = 0;
-                            heatTransferCoefficient0 = 0;
+                            heatTransferCoefficient0 = _htcValues[i + 1];
+                            temperature0 = _htcValues[i + 0];
+                            i += 2;
                         }
 
-                        return ((heatTransferCoefficient1 - heatTransferCoefficient0) / (temperature1 - temperature0) * temperature -
-                            ((heatTransferCoefficient1 - heatTransferCoefficient0) / (temperature1 - temperature0) * temperature0 - heatTransferCoefficient0));
-                    }
-                    else
-                    {
-                        return _htcValues[(_dimensionNumber * 2) - 1];
-                    }
-                }
+                        if (i < (_dimensionNumber * 2))
+                        {
+                            heatTransferCoefficient1 = _htcValues[i + 1];
+                            temperature1 = _htcValues[i + 0];
 
-                return 0;
+                            if (i == 0)
+                            {
+                                temperature0 = 0;
+                                heatTransferCoefficient0 = 0;
+                            }
+
+                            // Linear-interpolate the return value.
+                            return ((heatTransferCoefficient1 - heatTransferCoefficient0) / (temperature1 - temperature0) * temperature -
+                                ((heatTransferCoefficient1 - heatTransferCoefficient0) / (temperature1 - temperature0) * temperature0 - heatTransferCoefficient0));
+                        }
+                        else
+                        {
+                            return _htcValues[(_dimensionNumber * 2) - 1];
+                        }
+                    }
+
+                    return 0;
+                }
+                // The calculation is based on the particle's position parameter.
+                else
+                {
+                    if (_dimensionNumber > 0)
+                    {
+                        double heatTransferCoefficient0 = 0;
+                        double heatTransferCoefficient1 = 0;
+                        double temperature0 = 0;
+                        double temperature1 = 0;
+                        int i = 0;
+
+                        while ((i < (_dimensionNumber * 2)) &&
+                            (_htcValues[i + 0] <= temperature))
+                        {
+                            heatTransferCoefficient0 = _particlePosition[(particleIndex * _dimensionNumber) + (i / 2)];
+                            temperature0 = _htcValues[i + 0];
+                            i += 2;
+                        }
+
+                        if (i < (_dimensionNumber * 2))
+                        {
+                            heatTransferCoefficient1 = _particlePosition[(particleIndex * _dimensionNumber) + (i / 2)];
+                            temperature1 = _htcValues[i + 0];
+
+                            if (i == 0)
+                            {
+                                temperature0 = 0;
+                                heatTransferCoefficient0 = 0;
+                            }
+
+                            // Linear-interpolate the return value.
+                            return ((heatTransferCoefficient1 - heatTransferCoefficient0) / (temperature1 - temperature0) * temperature -
+                                ((heatTransferCoefficient1 - heatTransferCoefficient0) / (temperature1 - temperature0) * temperature0 - heatTransferCoefficient0));
+                        }
+                        else
+                        {
+                            return _particlePosition[(particleIndex * _dimensionNumber) + (_dimensionNumber - 1)];
+                        }
+                    }
+
+                    return 0;
+                }
             }
+            // Use the global best position.
             else
             {
                 if (_dimensionNumber > 0)
@@ -721,14 +786,14 @@ namespace IhcpPso1dCSharpSingleThreaded
                     while ((i < (_dimensionNumber * 2)) &&
                         (_htcValues[i + 0] <= temperature))
                     {
-                        heatTransferCoefficient0 = _particlePosition[(particleIndex * _dimensionNumber) + (i / 2)];
+                        heatTransferCoefficient0 = _globalBestPosition[(_globalBestSize * _dimensionNumber) + (i / 2)];
                         temperature0 = _htcValues[i + 0];
                         i += 2;
                     }
 
                     if (i < (_dimensionNumber * 2))
                     {
-                        heatTransferCoefficient1 = _particlePosition[(particleIndex * _dimensionNumber) + (i / 2)];
+                        heatTransferCoefficient1 = _globalBestPosition[(_globalBestSize * _dimensionNumber) + (i / 2)];
                         temperature1 = _htcValues[i + 0];
 
                         if (i == 0)
@@ -737,12 +802,13 @@ namespace IhcpPso1dCSharpSingleThreaded
                             heatTransferCoefficient0 = 0;
                         }
 
+                        // Linear-interpolate the return value.
                         return ((heatTransferCoefficient1 - heatTransferCoefficient0) / (temperature1 - temperature0) * temperature -
                             ((heatTransferCoefficient1 - heatTransferCoefficient0) / (temperature1 - temperature0) * temperature0 - heatTransferCoefficient0));
                     }
                     else
                     {
-                        return _particlePosition[(particleIndex * _dimensionNumber) + (_dimensionNumber - 1)];
+                        return _globalBestPosition[(_globalBestSize * _dimensionNumber) + (_dimensionNumber - 1)];
                     }
                 }
 
@@ -751,7 +817,7 @@ namespace IhcpPso1dCSharpSingleThreaded
         }
 
         /// <summary>
-        /// 
+        /// Writes the reference cool-down curve values to a file.
         /// </summary>
         private static void WriteReferenceCooldownLogToFile()
         {
@@ -777,7 +843,7 @@ namespace IhcpPso1dCSharpSingleThreaded
         }
 
         /// <summary>
-        /// 
+        /// Writes the particle swarm optimization's global best fitness and position values to a file.
         /// </summary>
         private static void WritePsoGlobalBestLogToFile()
         {
@@ -814,7 +880,7 @@ namespace IhcpPso1dCSharpSingleThreaded
         }
 
         /// <summary>
-        /// 
+        /// Writes the termination reason, the time elapsed of the optimization and the interaation count to a file.
         /// </summary>
         /// <param name="elaspedMilliseconds"></param>
         private static void WriteExitResultAndTimeLogToFile(long elaspedMilliseconds)
@@ -829,9 +895,9 @@ namespace IhcpPso1dCSharpSingleThreaded
         }
 
         /// <summary>
-        /// 
+        /// Initializes the particle given by it's index in the swarm.
         /// </summary>
-        /// <param name="particleIndex"></param>
+        /// <param name="particleIndex">The particle's index in the swarm.</param>
         private static void InitializeParticle(int particleIndex)
         {
             GetInitialPosition(particleIndex);
@@ -846,11 +912,11 @@ namespace IhcpPso1dCSharpSingleThreaded
         }
 
         /// <summary>
-        /// 
+        /// Calculates the calculated cool-down curve from the particle's position given by the particle's index and summs the difference with the reference cool-down curve.
         /// </summary>
-        /// <param name="particleIndex"></param>
-        /// <returns></returns>
-        public static double ObjectiveFunction(int particleIndex)
+        /// <param name="particleIndex">The particle's index in the swarm.</param>
+        /// <returns>The sum of the difference between the reference cool-down curve and the calculated cool-down curve.</returns>
+        private static double ObjectiveFunction(int particleIndex)
         {
             int calculatedCooldownCurveSizeRows = _referenceCooldownCurveSizeRows;
             double[] calculatedCooldownCurve = new double[calculatedCooldownCurveSizeRows * 2];
@@ -860,7 +926,7 @@ namespace IhcpPso1dCSharpSingleThreaded
 
             for (int i = 0; i < (calculatedCooldownCurveSizeRows * 2); i += 2)
             {
-                currentTemperature = CalculateCooldownCurve1D(true, particleIndex, currentTemperature, previousTemperature, g);
+                currentTemperature = CalculateCooldownCurve1D(true, particleIndex, false, currentTemperature, previousTemperature, g);
                 calculatedCooldownCurve[i + 0] = ((i / 2) * _timeDifference);
                 calculatedCooldownCurve[i + 1] = currentTemperature[_monitoredIndex];
 
@@ -882,8 +948,7 @@ namespace IhcpPso1dCSharpSingleThreaded
 
                     for (int i = 0; i < _referenceCooldownCurveSizeRows * 2; i += 2)
                     {
-                        sum += Math.Pow(Convert.ToDouble(_referenceCooldownCurve[i + 1].ToString("000.0")) -
-                                Convert.ToDouble(calculatedCooldownCurve[i + 1].ToString("000.0")), 2);
+                        sum += Math.Pow(_referenceCooldownCurve[i + 1] - calculatedCooldownCurve[i + 1], _powerExponent);
                     }
 
                     calculatedCooldownCurve = null;
@@ -906,7 +971,7 @@ namespace IhcpPso1dCSharpSingleThreaded
         }
 
         /// <summary>
-        /// 
+        /// Optimizes the particle's postions and checks for a termination reason.
         /// </summary>
         private static void Optimize()
         {
@@ -1022,7 +1087,7 @@ namespace IhcpPso1dCSharpSingleThreaded
                     }
                 }
 
-                if (((double)_globalBestSize / (double)_epoch) < 0.03)
+                if (((_globalBestSize * 1.0) / (_epoch * 1.0)) < 0.03)
                 {
                     _exitReason = "The convergence of the " + (_particleOptimalisationType == 1 ? "Clerc" : "Quantum") + " PSO is too slow, it may not find the optimum";
 
@@ -1046,7 +1111,7 @@ namespace IhcpPso1dCSharpSingleThreaded
         }
 
         /// <summary>
-        /// 
+        /// Sets the neighbors for the particles.
         /// </summary>
         private static void UpdateRing()
         {
@@ -1095,11 +1160,11 @@ namespace IhcpPso1dCSharpSingleThreaded
         }
 
         /// <summary>
-        /// 
+        /// Optimizes the position of the particle given by the particle's index.
         /// </summary>
-        /// <param name="particleIndex"></param>
-        /// <param name="mbest"></param>
-        /// <param name="beta"></param>
+        /// <param name="particleIndex">The particle's index in the swarm.</param>
+        /// <param name="mbest">The modus of the global best positions.</param>
+        /// <param name="beta">The beta value.</param>
         private static void OptimizePosition(int particleIndex, double mbest, double beta)
         {
             switch (_particleOptimalisationType)
@@ -1116,9 +1181,9 @@ namespace IhcpPso1dCSharpSingleThreaded
         }
 
         /// <summary>
-        /// 
+        /// Updates the particle's position and velocity if the optimization type is Clerc.
         /// </summary>
-        /// <param name="particleIndex"></param>
+        /// <param name="particleIndex">The particle's index in the swarm.</param>
         private static void UpdateClercPosition(int particleIndex)
         {
             UpdateVelocity(particleIndex, GetBestLocalPositions(particleIndex));
@@ -1126,9 +1191,9 @@ namespace IhcpPso1dCSharpSingleThreaded
         }
 
         /// <summary>
-        /// 
+        /// Updates the position's fitness value.
         /// </summary>
-        /// <param name="particleIndex"></param>
+        /// <param name="particleIndex">The particle's index in the swarm.</param>
         private static void UpdateErrorValues(int particleIndex)
         {
             double[] checkPosition = new double[_dimensionNumber];
@@ -1157,9 +1222,9 @@ namespace IhcpPso1dCSharpSingleThreaded
         }
 
         /// <summary>
-        /// 
+        /// Updates the particle's position.
         /// </summary>
-        /// <param name="currentParticle"></param>
+        /// <param name="particleIndex">The particle's index in the swarm.</param>
         private static void UpdatePosition(int particleIndex)
         {
             for (int i = 0; i < _dimensionNumber; i++)
@@ -1171,11 +1236,11 @@ namespace IhcpPso1dCSharpSingleThreaded
         }
 
         /// <summary>
-        /// 
+        /// Updates the particle's position if the optimization type is Quantum.
         /// </summary>
-        /// <param name="particleIndex"></param>
-        /// <param name="mbest"></param>
-        /// <param name="beta"></param>
+        /// <param name="particleIndex">The particle's index in the swarm.</param>
+        /// <param name="mbest">The modus of the global best positions.</param>
+        /// <param name="beta">The beta value.</param>
         private static void UpdateQuantumPosition(int particleIndex, double mbest, double beta)
         {
             for (int i = 0; i < _dimensionNumber; i++)
@@ -1210,10 +1275,10 @@ namespace IhcpPso1dCSharpSingleThreaded
         }
 
         /// <summary>
-        /// 
+        /// Updates the particle's velocity.
         /// </summary>
-        /// <param name="particleIndex"></param>
-        /// <param name="bestLocalPosition"></param>
+        /// <param name="particleIndex">The particle's index in the swarm.</param>
+        /// <param name="bestLocalPosition">The positions of the particle with the best fitness value in the neigborhood.</param>
         private static void UpdateVelocity(int particleIndex, double[] bestLocalPosition)
         {
             for (int i = 0; i < _dimensionNumber; i++)
@@ -1230,10 +1295,10 @@ namespace IhcpPso1dCSharpSingleThreaded
         }
 
         /// <summary>
-        /// 
+        /// Checks if all of the given position values are in the specified range.
         /// </summary>
-        /// <param name="position"></param>
-        /// <returns></returns>
+        /// <param name="position">The position values that needs to be checked.</param>
+        /// <returns>True if the position values are in range, false if at least one of the position value is not in the specified range.</returns>
         private static bool CheckIsInRange(double[] position)
         {
 			for (int i = 0; i < _dimensionNumber; i++)
@@ -1248,10 +1313,10 @@ namespace IhcpPso1dCSharpSingleThreaded
         }
 
         /// <summary>
-        /// 
+        /// Gets the positions of a particle with the best fitness value from the neighborhood.
         /// </summary>
-        /// <param name="particleIndex"></param>
-        /// <returns></returns>
+        /// <param name="particleIndex">The particle's index in the swarm.</param>
+        /// <returns>The positions of a particle with the best fitness value from the neighborhood.</returns>
         private static double[] GetBestLocalPositions(int particleIndex)
         {
             double[] returnValue = new double[_dimensionNumber];
@@ -1274,10 +1339,10 @@ namespace IhcpPso1dCSharpSingleThreaded
         }
 
         /// <summary>
-        /// 
+        /// Sets the default value of the particle's position given by the particle index.
         /// </summary>
-        /// <param name="particleIndex"></param>
-        public static void GetInitialPosition(int particleIndex)
+        /// <param name="particleIndex">The particle's index in the swarm.</param>
+        private static void GetInitialPosition(int particleIndex)
         {
             for (int i = 0; i < _dimensionNumber; i++)
             {
@@ -1310,10 +1375,10 @@ namespace IhcpPso1dCSharpSingleThreaded
         }
 
         /// <summary>
-        /// 
+        /// Sets the default value of the particle's velocity given by the particle index.
         /// </summary>
-        /// <param name="particleIndex"></param>
-        public static void GetInitialVelocity(int particleIndex)
+        /// <param name="particleIndex">The particle's index in the swarm.</param>
+        private static void GetInitialVelocity(int particleIndex)
         {
             for (int i = 0; i < _dimensionNumber; i++)
             {
@@ -1346,11 +1411,11 @@ namespace IhcpPso1dCSharpSingleThreaded
         }
 
         /// <summary>
-        /// 
+        /// Creates an array of 32 bit integer numbers in the given range.
         /// </summary>
-        /// <param name="startIndex"></param>
-        /// <param name="count"></param>
-        /// <returns></returns>
+        /// <param name="startIndex">The starting number from where to start the range.</param>
+        /// <param name="count">The number of numbers to include in the range.</param>
+        /// <returns>An array of 32 bit integer numbers in the given range.</returns>
         private static int[] GetIntegerRange(int startIndex, int count)
         {
             int[] returnValue = new int[count];
@@ -1364,11 +1429,11 @@ namespace IhcpPso1dCSharpSingleThreaded
         }
 
         /// <summary>
-        /// 
+        /// Shuffles the given array of 32 bit integers to a random order.
         /// </summary>
-        /// <param name="index"></param>
-        /// <param name="indexSize"></param>
-        /// <returns></returns>
+        /// <param name="index">The array of 32 bit integer numbers to shuffle.</param>
+        /// <param name="indexSize">The length of the array.</param>
+        /// <returns>The shuffled array of 32 bit integer numbers.</returns>
         private static int[] Shuffle(int[] index, int indexSize)
         {
             for (int i = 0; i < indexSize; i++)
@@ -1383,9 +1448,9 @@ namespace IhcpPso1dCSharpSingleThreaded
         }
 
         /// <summary>
-        /// 
+        /// Gets the modus of the best positions of the particles.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The modus of the best positions of the particles.</returns>
         private static double GetSwarmAverageBestPosition()
         {
             double sum = 0;
@@ -1399,6 +1464,60 @@ namespace IhcpPso1dCSharpSingleThreaded
             }
 
             return ((sum * 1.0) / _particleSwarmSize);
+        }
+
+        /// <summary>
+        /// Calculates the calculated cool-down curve.
+        /// </summary>
+        private static void CalculateCalculatedCooldownCurve()
+        {
+            _calculatedCooldownCurveSizeRows = _referenceCooldownCurveSizeRows;
+            _calculatedCooldownCurve = new double[_calculatedCooldownCurveSizeRows * 2];
+            double[] currentTemperature = SetInitialCurrentTemperature();
+            double[] previousTemperature = SetInitialPreviousTemperature();
+            double[] g = SetInitialG();
+
+            for (int i = 0; i < (_calculatedCooldownCurveSizeRows * 2); i += 2)
+            {
+                currentTemperature = CalculateCooldownCurve1D(false, -1, true, currentTemperature, previousTemperature, g);
+                _calculatedCooldownCurve[i + 0] = ((i / 2) * _timeDifference);
+                _calculatedCooldownCurve[i + 1] = currentTemperature[_monitoredIndex];
+
+                for (int j = 0; j < _horizontalSplitting; j++)
+                {
+                    previousTemperature[j] = currentTemperature[j];
+                }
+            }
+
+            currentTemperature = null;
+            previousTemperature = null;
+            g = null;
+        }
+
+        /// <summary>
+        /// Writes the calculated cool-down curve values to a file.
+        /// </summary>
+        private static void WriteCalculatedCooldownLogToFile()
+        {
+            if (_calculatedCooldownCurve != null && _calculatedCooldownCurveSizeRows > 0)
+            {
+                using (Stream stream = File.Open("CalculatedCooldownLog.txt", FileMode.Create, FileAccess.Write))
+                {
+                    using (StreamWriter streamWriter = new StreamWriter(stream))
+                    {
+                        streamWriter.Write("time ");
+                        streamWriter.Write("temperature ");
+                        streamWriter.Write("\r\n");
+
+                        for (int i = 0; i < (_calculatedCooldownCurveSizeRows * 2); i += 2)
+                        {
+                            streamWriter.Write(_calculatedCooldownCurve[i + 0].ToString("000.000").Replace(",", ".") + " ");
+                            streamWriter.Write(_calculatedCooldownCurve[i + 1].ToString("000.000").Replace(",", ".") + " ");
+                            streamWriter.Write("\r\n");
+                        }
+                    }
+                }
+            }
         }
 
         #endregion Methods

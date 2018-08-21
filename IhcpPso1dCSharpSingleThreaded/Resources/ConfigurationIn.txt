@@ -6,6 +6,8 @@
 60
 # Monitored Index
 9
+# Power Exponent
+2
 # Range Min
 0
 # Range Max
